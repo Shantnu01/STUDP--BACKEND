@@ -35,7 +35,12 @@ app.use(helmet())
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:3000')
   .split(',')
   .map(o => o.trim())
-  .concat(['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3001'])
+  .concat([
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:3001',
+    'https://studp-frontend-xafb.vercel.app'
+  ])
 
 app.use(cors({
   origin: (origin, cb) => {
