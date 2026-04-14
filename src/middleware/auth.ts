@@ -26,13 +26,21 @@ export async function verifyToken(req: AuthRequest, res: Response, next: NextFun
     const userDoc = await db.collection('users').doc(req.uid).get()
     if (userDoc.exists) {
       const data = userDoc.data()
-      req.role     = data?.role
+      req.role     = data?.role || 'principal'
       req.schoolId = data?.schoolId
     } else {
-      // Check if user is super admin
-      const adminDoc = await db.collection('admins').doc(req.uid).get()
-      if (adminDoc.exists) {
-        req.role = 'admin'
+      // Check if user is a teacher
+      const teacherSnap = await db.collection('teachers').where('uid', '==', req.uid).limit(1).get()
+      if (!teacherSnap.empty) {
+        const teacherData = teacherSnap.docs[0].data()
+        req.role = 'teacher'
+        req.schoolId = teacherData.schoolId
+      } else {
+        // Check if user is super admin
+        const adminDoc = await db.collection('admins').doc(req.uid).get()
+        if (adminDoc.exists) {
+          req.role = 'admin'
+        }
       }
     }
     

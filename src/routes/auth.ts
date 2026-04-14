@@ -27,17 +27,19 @@ router.post('/create-admin', ...adminOnly, async (req: AuthRequest, res: Respons
     res.status(400).json({ error: e.message })
   }
 })
+
 // GET /api/auth/me — current user info
 router.get('/me', verifyToken, async (req: AuthRequest, res: Response) => {
   try {
-    const [user, adminDoc, userDoc, registrationSnap] = await Promise.all([
+    const [user, adminDoc, userDoc, teacherSnap, registrationSnap] = await Promise.all([
       auth.getUser(req.uid!),
       db.collection('admins').doc(req.uid!).get(),
       db.collection('users').doc(req.uid!).get(),
+      db.collection('teachers').where('uid', '==', req.uid!).limit(1).get(),
       db.collection('registrations').where('uid', '==', req.uid!).limit(1).get(),
     ])
 
-    console.log(`[auth/me] UID:${req.uid!} Admin:${adminDoc.exists} User:${userDoc.exists} Reg:${!registrationSnap.empty}`)
+    console.log(`[auth/me] UID:${req.uid!} Admin:${adminDoc.exists} User:${userDoc.exists} Teacher:${!teacherSnap.empty} Reg:${!registrationSnap.empty}`)
 
     // Check if user exists in the admins collection
     if (adminDoc.exists) {
@@ -66,29 +68,56 @@ router.get('/me', verifyToken, async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Unknown user — return 403, not a 200 with 'user' role
-    // This prevents unprovisioned accounts from being routed anywhere
+    // Check if they are a teacher
+    if (!teacherSnap.empty) {
+      const teacherData = { id: teacherSnap.docs[0].id, ...teacherSnap.docs[0].data() } as any
+      if (teacherData.status === 'inactive') {
+        return res.status(403).json({ error: 'Teacher account is inactive.' })
+      }
+      return res.json({
+        uid:         user.uid,
+        email:       user.email,
+        displayName: user.displayName || teacherData.name,
+        role:        'teacher',
+        schoolId:    teacherData.schoolId,
+        status:      teacherData.status,
+        ...teacherData
+      })
+    }
+
+    // Unknown user — return 403 with descriptive error
     if (!registrationSnap.empty) {
       const registration = registrationSnap.docs[0].data()
 
       if (registration.status === 'pending') {
-        return res.status(403).json({ error: 'Your registration is pending admin approval.' })
+        return res.status(403).json({ 
+          error: 'REGISTRATION_PENDING',
+          message: 'Your registration is pending admin approval.' 
+        })
       }
 
       if (registration.status === 'rejected') {
-        return res.status(403).json({ error: 'Your registration request was rejected. Contact the administrator.' })
+        return res.status(403).json({ 
+          error: 'REGISTRATION_REJECTED',
+          message: 'Your registration request was rejected. Contact the administrator.' 
+        })
       }
 
       if (registration.status === 'approved') {
-        return res.status(403).json({ error: 'Your account is being prepared. Please try again shortly.' })
+        return res.status(403).json({ 
+          error: 'REGISTRATION_PROCESSING',
+          message: 'Your account is being prepared. Please try again shortly.' 
+        })
       }
     }
 
-    return res.status(403).json({ error: 'No portal access assigned to this account.' })
+    return res.status(403).json({ 
+      error: 'PROFILE_NOT_FOUND',
+      message: 'No institutional profile found for this account.' 
+    })
   } catch (e: any) {
-    // Never expose internal error details
     console.error('[auth/me]', e.message)
-    res.status(500).json({ error: 'Could not retrieve account information.' })
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not retrieve account information.' })
   }
 })
 
@@ -114,6 +143,7 @@ router.post('/setup-first-admin', async (req, res: Response) => {
     res.status(400).json({ error: e.message })
   }
 })
+
 // POST /api/auth/send-signup-otp
 router.post('/send-signup-otp', async (req, res: Response) => {
   try {
