@@ -21,7 +21,11 @@ import feesRouter from './routes/fees'
 import dashboardRouter from './routes/dashboard'
 import plansRouter from './routes/plans'
 import personnelPaymentsRouter from './routes/personnelPayments'
+import emailRouter from './routes/email'
+import leaveRouter from './routes/leave'
+import settingsRouter from './routes/settings'
 import { startAttendanceCron } from './cron/attendanceCron'
+import { startLeaveCleanupCron } from './cron/leaveCron'
 
 const app  = express()
 const PORT = process.env.PORT || 4000
@@ -77,7 +81,10 @@ app.use('/api/teachers',      teachersRouter)
 app.use('/api/classes',       classesRouter)
 app.use('/api/attendance',    attendanceRouter)
 app.use('/api/fees',          feesRouter)
+app.use('/api/email',         emailRouter)
 app.use('/api/personnel-payments', personnelPaymentsRouter)
+app.use('/api/leave',         leaveRouter)
+app.use('/api/settings',      settingsRouter)
 
 // Health check
 app.get('/health', (_req, res) => res.json({
@@ -105,6 +112,7 @@ app.listen(PORT, () => {
   
   // Boot scheduled background jobs
   startAttendanceCron()
+  startLeaveCleanupCron()
 })
 
 export default app
